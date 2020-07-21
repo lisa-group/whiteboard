@@ -11,6 +11,7 @@ import InfoService from "./services/InfoService";
 import { getSubDir } from "./utils";
 import ConfigService from "./services/ConfigService";
 import { v4 as uuidv4 } from "uuid";
+import * as signalR from "@microsoft/signalr";
 
 const urlParams = new URLSearchParams(window.location.search);
 let whiteboardId = urlParams.get("whiteboardid");
@@ -44,47 +45,23 @@ if (title) {
 
 const subdir = getSubDir();
 let signaling_socket;
+let connection;
 
 function main() {
-    signaling_socket = io("", { path: subdir + "/ws-api" }); // Connect even if we are in a subdir behind a reverse proxy
+    connection = new signalR.HubConnectionBuilder().withUrl("ws/wb").build();
 
-    signaling_socket.on("connect", function () {
-        console.log("Websocket connected!");
-
-        signaling_socket.on("whiteboardConfig", (serverResponse) => {
-            ConfigService.initFromServer(serverResponse);
-            // Inti whiteboard only when we have the config from the server
-            initWhiteboard();
-        });
-
-        signaling_socket.on("whiteboardInfoUpdate", (info) => {
-            InfoService.updateInfoFromServer(info);
-            whiteboard.updateSmallestScreenResolution();
-        });
-
-        signaling_socket.on("drawToWhiteboard", function (content) {
-            whiteboard.handleEventsAndData(content, true);
-            InfoService.incrementNbMessagesReceived();
-        });
-
-        signaling_socket.on("refreshUserBadges", function () {
-            whiteboard.refreshUserBadges();
-        });
-
-        let accessDenied = false;
-        signaling_socket.on("wrongAccessToken", function () {
-            if (!accessDenied) {
-                accessDenied = true;
-                showBasicAlert("Access denied! Wrong accessToken!");
-            }
-        });
-
-        signaling_socket.emit("joinWhiteboard", {
-            wid: whiteboardId,
-            at: accessToken,
-            windowWidthHeight: { w: $(window).width(), h: $(window).height() },
-        });
+    connection.on("drawToWhiteboard", function (content) {
+        whiteboard.handleEventsAndData(content, true);
+        InfoService.incrementNbMessagesReceived();
     });
+
+    connection.on("whiteboardConfig", (serverResponse) => {
+        ConfigService.initFromServer(serverResponse);
+        // Inti whiteboard only when we have the config from the server
+        initWhiteboard();
+    });
+
+    connection.start().catch((err) => document.write(err));
 }
 
 function showBasicAlert(html, newOptions) {
@@ -161,7 +138,8 @@ function initWhiteboard() {
                 //     if (whiteboard.drawFlag) return;
                 // }
                 content["at"] = accessToken;
-                signaling_socket.emit("drawToWhiteboard", content);
+                //signaling_socket.emit("drawToWhiteboard", content);
+                connection.send("drawToWhiteboard", content);
                 InfoService.incrementNbMessagesSent();
             },
         });
@@ -179,6 +157,10 @@ function initWhiteboard() {
                 windowWidthHeight: { w: $(window).width(), h: $(window).height() },
             });
         });
+
+        if (ConfigService.isReadOnly) {
+            $("#toolbar").hide();
+        }
 
         /*----------------/
         Whiteboard actions
