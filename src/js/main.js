@@ -1,5 +1,4 @@
 import keymage from "keymage";
-import io from "socket.io-client";
 import whiteboard from "./whiteboard";
 import keybinds from "./keybinds";
 import Picker from "vanilla-picker";
@@ -8,7 +7,6 @@ import pdfjsLib from "pdfjs-dist/webpack";
 import shortcutFunctions from "./shortcutFunctions";
 import ReadOnlyService from "./services/ReadOnlyService";
 import InfoService from "./services/InfoService";
-import { getSubDir } from "./utils";
 import ConfigService from "./services/ConfigService";
 import { v4 as uuidv4 } from "uuid";
 import * as signalR from "@microsoft/signalr";
@@ -43,12 +41,13 @@ if (title) {
     document.title = decodeURIComponent(title);
 }
 
-const subdir = getSubDir();
 let signaling_socket;
 let connection;
 
+var __host = window.location.href.indexOf("//localhost") > 0 ? "https://localhost:5001/" : "";
+
 function main() {
-    connection = new signalR.HubConnectionBuilder().withUrl("ws/wb").build();
+    connection = new signalR.HubConnectionBuilder().withUrl(__host + "ws/wb").build();
 
     connection.on("drawToWhiteboard", function (content) {
         whiteboard.handleEventsAndData(content, true);
@@ -145,7 +144,7 @@ function initWhiteboard() {
         });
 
         // request whiteboard from server
-        $.get(subdir + "/api/loadwhiteboard", { wid: whiteboardId, at: accessToken }).done(
+        $.get(__host + "t-lab-api/whiteboard", { wid: whiteboardId, at: accessToken }).done(
             function (data) {
                 whiteboard.loadData(data);
             }
